@@ -12,11 +12,13 @@ import http from 'http';
 import { appContainer } from './services/inversify.config';
 import { SocketManagerServiceInterface } from './services/interfaces';
 import { TYPES } from './services/types';
+
 import { credentialIssuerRouter } from './routers/credential_issuer.router';
 import { proxyRouter } from './routers/proxy.router';
 import { helperRouter } from './routers/helper.router';
 import { verifierRouter } from './routers/verifier.router';
 import { walletProviderRouter } from './routers/wallet_provider.router';
+import { openidRouter } from './routers/openid.router';
 
 
 const app: Express = express();
@@ -42,6 +44,7 @@ app.use(cors({
 app.use('/status', statusRouter);
 app.use('/user', userController);
 
+app.use('/.well-known', openidRouter);
 
 app.use(AuthMiddleware);
 
