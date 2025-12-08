@@ -1,8 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import express, { Request, Response, Router } from "express";
 import { getAllVerifiableCredentials, getVerifiableCredentialByCredentialIdentifier, deleteVerifiableCredential, createVerifiableCredential, updateVerifiableCredential, VerifiableCredentialEntity } from "../entities/VerifiableCredential.entity";
 import { createVerifiablePresentation, deletePresentationsByCredentialId, getAllVerifiablePresentations, getPresentationByIdentifier } from "../entities/VerifiablePresentation.entity";
 import { getUser } from "../entities/user.entity";
 
+const eventsPath = "./events";
 
 const storageRouter: Router = express.Router();
 
@@ -136,7 +139,6 @@ async function getPresentationByPresentationIdentifierController(req: Request, r
 	const vp = vpResult.unwrap();
 	res.status(200).send(vp);
 }
-
 
 export {
 	storageRouter

@@ -9,6 +9,7 @@ console.log(parse(yamlConfig));
 export const config: {
 	url: string;
 	port: string;
+	accessTokenTtlInSeconds: number;
 	appSecret: string;
 	ssl: string;
 	db: {
