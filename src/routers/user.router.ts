@@ -1,13 +1,13 @@
-import crypto from 'node:crypto';
 import express, { Request, Response, Router } from 'express';
-import { EncryptJWT, importJWK, JWK} from 'jose';
+import * as uuid from 'uuid';
+import crypto from 'node:crypto';
 import * as SimpleWebauthn from '@simplewebauthn/server';
 import base64url from 'base64url';
 import { EntityManager } from "typeorm"
 
 import { config } from '../../config';
 import { CreateUser, createUser, deleteUser, deleteWebauthnCredential, getUserByCredentials, getUser, getUserByWebauthnCredential, GetUserErr, newWebauthnCredentialEntity, privateDataEtag, updateUser, UpdateUserErr, updateWebauthnCredential, updateWebauthnCredentialById, UserEntity, UserId } from '../entities/user.entity';
-import { checkedUpdate, EtagUpdate } from '../util/util';
+import { checkedUpdate, EtagUpdate, jsonParseTaggedBinary } from '../util/util';
 import { AuthMiddleware, createAppToken } from '../middlewares/auth.middleware';
 import { ChallengeErr, createChallenge, popChallenge } from '../entities/WebauthnChallenge.entity';
 import * as webauthn from '../webauthn';
@@ -34,27 +34,17 @@ userController.use(AuthMiddleware);
 noAuthUserController.use('/session', userController);
 
 
-async function initSession(user: UserEntity, sessionPublicKeyJwk?: JWK): Promise<{
+async function initSession(user: UserEntity): Promise<{
 	uuid: UserId,
-	challenge: string,
+	appToken: string,
 	username?: string,
 	displayName: string,
 	privateData: Buffer,
 	webauthnRpId: string,
 }> {
-	if (!sessionPublicKeyJwk) throw new Error("session public key is required")
-	const now = Date.now() / 1000
-	const appToken = await createAppToken(user, sessionPublicKeyJwk)
-	console.log(config.accessTokenTtlInSeconds)
-	console.log(sessionPublicKeyJwk)
-	const challenge = await new EncryptJWT({ appToken })
-		.setExpirationTime(now + 900)
-		.setProtectedHeader({ enc: "A256GCM", alg: "RSA-OAEP" })
-		.encrypt(await importJWK(sessionPublicKeyJwk, "RSA-OAEP-256"))
-
 	return {
 		uuid: user.uuid,
-		challenge,
+		appToken: await createAppToken(user),
 		displayName: user.displayName || user.username,
 		privateData: user.privateData,
 		username: user.username,
@@ -149,7 +139,6 @@ noAuthUserController.post('/register-webauthn-begin', async (req: Request, res: 
 noAuthUserController.post('/register-webauthn-finish', async (req: Request, res: Response) => {
 	console.log("webauthn register-finish", req.body);
 
-	const sessionPublicKeyJwk = req.body.sessionPublicKey;
 	const challengeRes = await popChallenge(req.body.challengeId);
 	if (challengeRes.err) {
 		if ([ChallengeErr.EXPIRED, ChallengeErr.NOT_EXISTS].includes(challengeRes.val)) {
@@ -223,7 +212,7 @@ noAuthUserController.post('/register-webauthn-finish', async (req: Request, res:
 			console.log("Created user", userRes.val);
 			res.status(200)
 				.header({ 'X-Private-Data-ETag': privateDataEtag(userRes.val.privateData) })
-				.send(await initSession(userRes.val, sessionPublicKeyJwk));
+				.send(await initSession(userRes.val));
 		} else {
 			res.status(500).send({});
 		}
@@ -254,7 +243,6 @@ noAuthUserController.post('/login-webauthn-finish', async (req: Request, res: Re
 	const userId = UserId.fromUserHandle(credential.response.userHandle);
 	const credentialId = credential.rawId;
 
-	const sessionPublicKeyJwk = req.body.sessionPublicKey;
 	const userRes = await getUserByWebauthnCredential(userId, credentialId);
 	if (userRes.err) {
 		res.status(403).send({});
@@ -314,7 +302,7 @@ noAuthUserController.post('/login-webauthn-finish', async (req: Request, res: Re
 		if (updateCredentialRes.ok) {
 			res.status(200)
 				.header({ 'X-Private-Data-ETag': privateDataEtag(user.privateData) })
-				.send(await initSession(user, sessionPublicKeyJwk));
+				.send(await initSession(user));
 		} else {
 			res.status(500).send({});
 		}
@@ -323,7 +311,6 @@ noAuthUserController.post('/login-webauthn-finish', async (req: Request, res: Re
 		res.status(400).send({});
 	}
 })
-
 
 userController.get('/account-info', async (req: Request, res: Response) => {
 	const userRes = await getUser(req.user.id);

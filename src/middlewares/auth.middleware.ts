@@ -22,14 +22,14 @@ export type AppTokenUser = {
 	did: string;
 }
 
-export async function createAppToken(user: UserEntity, sessionPublicKeyJwk: JWK): Promise<string> {
+export async function createAppToken(user: UserEntity, sessionPublicKeyJwk?: JWK): Promise<string> {
 	const now = Date.now() / 1000
 	const secret = new TextEncoder().encode(config.appSecret);
 	const payload: AppTokenPayload = {
 		v: TOKEN_PAYLOAD_VERSION,
 		uuid: user.uuid.id,
 		sessionPublicKeyJwk,
-		keyid: await calculateJwkThumbprint(sessionPublicKeyJwk),
+		keyid: sessionPublicKeyJwk && await calculateJwkThumbprint(sessionPublicKeyJwk),
 	};
 	return await new SignJWT(payload)
 		.setExpirationTime(now + 900)
