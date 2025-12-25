@@ -1,4 +1,5 @@
-import express, { Express } from 'express';
+import express, { Express, Request } from 'express';
+import { Storage } from '@wwwallet/server-core';
 import { config } from '../config';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
@@ -19,21 +20,30 @@ import { verifierRouter } from './routers/verifier.router';
 import { walletProviderRouter } from './routers/wallet_provider.router';
 
 
-const app: Express = express();
+export const app: Express = express();
 // __dirname is "/path/to/dist/src"
 
 app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: true, limit: '17mb' }));
 app.use(bodyParser.json({ reviver: reviverTaggedBase64UrlToBuffer, limit: '17mb' }));
 app.set('json replacer', replacerBufferToTaggedBase64Url);
+app.use(express.json({ type: ["application/jwk+json"] }));
+app.use(express.text({ type: ["application/jose"] }));
 
 app.use(express.static('public'));
 // __dirname is "/path/to/dist/src"
 // public is located at "/path/to/dist/src"
 app.use(cors({
 	credentials: true,
-	origin: true,
-	allowedHeaders: ['Authorization', 'Content-Type', 'If-None-Match', 'X-Private-Data-If-Match', 'X-Private-Data-If-None-Match'],
+	origin: [config.walletClientUrl],
+	allowedHeaders: [
+		'Authorization',
+		'DPoP',
+		'Content-Type',
+		'If-None-Match',
+		'X-Private-Data-If-Match',
+		'X-Private-Data-If-None-Match',
+	],
 	exposedHeaders: ['X-Private-Data-ETag'],
 }));
 
@@ -42,6 +52,21 @@ app.use(cors({
 app.use('/status', statusRouter);
 app.use('/user', userController);
 
+// --- Storage
+
+const eventStorage = appContainer.get<Storage>(TYPES.EventStorage);
+
+app.get("/event-store/events", async (req, res) => {
+	const response = await eventStorage.getEvents(req as Request);
+
+	return res.status(response.status).send(response.body);
+});
+
+app.put("/event-store/events/:hash", async (req, res) => {
+	const response = await eventStorage.storeEvent(req);
+
+	return res.status(response.status).send(response.body);
+});
 
 app.use(AuthMiddleware);
 

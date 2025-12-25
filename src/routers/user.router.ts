@@ -312,7 +312,6 @@ noAuthUserController.post('/login-webauthn-finish', async (req: Request, res: Re
 	}
 })
 
-
 userController.get('/account-info', async (req: Request, res: Response) => {
 	const userRes = await getUser(req.user.id);
 	if (userRes.err) {
